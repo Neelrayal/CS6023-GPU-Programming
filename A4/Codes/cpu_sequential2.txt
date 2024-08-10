@@ -1,0 +1,125 @@
+/* Sequential Code for testing purpose */
+#include <iostream>
+#include <stdio.h>
+#include <chrono>
+#define ll long long
+using namespace std;
+
+//*******************************************
+
+// Write down the kernels here
+
+
+//***********************************************
+
+
+int main(int argc,char **argv)
+{
+    // Variable declarations
+    int M,N,T,H,*xcoord,*ycoord,*score;
+
+    cin >> M >> N >> T >> H ;    
+    // Allocate memory on CPU
+    xcoord=(int*)malloc(T * sizeof (int));  // X coordinate of each tank
+    ycoord=(int*)malloc(T * sizeof (int));  // Y coordinate of each tank
+    score=(int*)malloc(T * sizeof (int));  // Score of each tank (ensure that at the end you have copied back the score calculations on the GPU back to this allocation)
+
+    // Get the Input of Tank coordinates
+    for(int i=0;i<T;i++)
+    {
+        cin >> xcoord[i] >> ycoord[i];       
+    }
+
+    
+
+    //*********************************
+    // Your Code begins here (Do not change anything in main() above this comment)
+    //********************************
+    int health[T];
+    int alive = T, round = 1;
+    for(int i = 0; i<T; ++i){
+      health[i] = H;
+      score[i] = 0;
+    }
+
+    while( alive > 1){
+        if ( round % T != 0){
+            //cout << "[] " << "round" << " " << round << "\n";
+            int updateHealth[T] = {0};
+
+            for(int srcTank = 0; srcTank<T; ++srcTank){
+                if ( health[srcTank] <= 0) continue;
+
+                int destTank = ( srcTank + round) % T;
+
+                ll slope_num1 = ycoord[destTank] - ycoord[srcTank];
+                ll slope_den1 = xcoord[destTank] - xcoord[srcTank];
+                //cout << "[][] srcTank " << srcTank << " destTank " << destTank << "\n";
+
+
+                for(int j = 0; j<T; ++j){
+                    if ( j == srcTank ||  j == destTank || health[j] <= 0) continue;
+
+                    ll slope_num2 = ycoord[j] - ycoord[srcTank];
+                    ll slope_den2 = xcoord[j] - xcoord[srcTank];
+
+                    if ( slope_num1 * slope_den2 != slope_den1 *  slope_num2)                
+                        continue; 
+
+                    if (health[destTank] <= 0){                        
+                        
+                        // slopes are same                            
+                        if ( slope_den1 == 0){ // vertical line
+
+                            if ( ycoord[srcTank] < ycoord[destTank] && ycoord[j] > ycoord[srcTank]) // +ve line
+                                destTank = j;
+                            
+                            if ( ycoord[srcTank] > ycoord[destTank] && ycoord[j] < ycoord[srcTank]) // -ve line
+                                destTank = j;
+                        }
+                        else{
+                            if (xcoord[destTank] > xcoord[srcTank] && xcoord[j] > xcoord[srcTank]){ // +ve line
+                                destTank = j; 
+                            }
+                            if (xcoord[destTank] < xcoord[srcTank] && xcoord[j] < xcoord[srcTank]){ // -ve line
+                                destTank = j; 
+                            }                                                                
+                        }
+                                                                            
+                    }
+                    else{
+                        if ( xcoord[j] < min (xcoord[srcTank], xcoord[destTank] ) || xcoord[j] > max (xcoord[srcTank], xcoord[destTank] ))
+                                    continue;
+                        if ( ycoord[j] < min (ycoord[srcTank], ycoord[destTank] ) || ycoord[j] > max (ycoord[srcTank], ycoord[destTank] ))
+                                continue;                    
+                         // slopes are same
+                            destTank = j;                        
+                    }
+
+                }
+                //cout << "[][][] finalDist" << dist << " change " << changeTank << "\n";
+                if ( health[destTank] > 0){
+                    score[srcTank] += 1;
+                    updateHealth[destTank] -= 1;
+                }
+            }
+
+            for(int i = 0; i<T; ++i){
+                if ( health[i] <= 0) continue;
+                health[i] += updateHealth[i];
+                if ( health[i] <= 0)
+                    alive--;
+            }           
+        }
+
+        ++round;        
+    }
+
+    for(int i = 0; i<T; ++i)
+        cout << score[i] << "\n"; 
+    //*********************************
+    // Your Code ends here (Do not change anything in main() below this comment)
+    //********************************
+   
+    return 0;
+}

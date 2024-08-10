@@ -1,0 +1,322 @@
+#include <iostream>
+#include <stdio.h>
+#include <cuda.h>
+#include <chrono>
+#include <thrust/device_vector.h>
+#include <thrust/device_ptr.h>
+
+
+#define ll long long
+using namespace std;
+
+__device__ int gT;
+//*******************************************
+
+// Write down the kernels here
+
+__global__ void initialize(int T, int *health, int H){
+    unsigned tid = threadIdx.x; 
+    if ( tid == 0){
+        gT = T;    
+    }
+    health[tid] = H; 
+}
+
+
+__global__ void K2(int *health, int *updateHealth, ll *finaldestTank,
+    int *dev_score, int *dev_xcoord, int *dev_ycoord, int round, int *alive){
+    int srcTank = threadIdx.x; 
+    if ( health[srcTank] <= 0) return;
+    //printf("srcTank %d before health %d update health %d\n",srcTank,  health[srcTank], updateHealth[srcTank]) ; 
+    health[srcTank] += updateHealth[srcTank];
+    //atomicAdd(&health[srcTank], updateHealth[srcTank]); 
+    //printf("srcTank %d after health %d update health %d\n", srcTank,  health[srcTank], updateHealth[srcTank]) ; 
+    if ( health[srcTank] <= 0) {
+        atomicAdd(alive, -1);
+        //printf("inside kernel, round: %d alive: %d \n", round, *alive);
+    }
+}
+
+__global__ void K1(int *health, int *updateHealth, ll *finaldestTank,
+    int *dev_score, int *dev_xcoord, int *dev_ycoord, int round, int *alive){
+
+    //K1 <<< 1 , T>>> (health, updateHealth, dev_score, dev_xcoord, dev_ycoord, round);
+
+    int srcTank = blockIdx.x;    
+    //printf("before tid %d health %d\n", srcTank, health[srcTank]);    
+
+    //printf("before tid %d \n", srcTank);
+    // whole block will return so no problem with syncthreads    
+    //printf("after tid %d \n", srcTank);
+    int destTank = ( srcTank + round) % gT;
+    int j = threadIdx.x; 
+    
+    ll slope_num1 = dev_ycoord[destTank] - dev_ycoord[srcTank];
+    ll slope_den1 = dev_xcoord[destTank] - dev_xcoord[srcTank];
+
+    ll slope_num2, slope_den2, dist;     
+    dist = 1e18; 
+    finaldestTank[srcTank] = dist;
+
+    bool flag = false; 
+    //printf("before srcTank %d destTank %d\n", srcTank, destTank);    
+    if (health[srcTank] > 0 && j != srcTank && health[j] > 0){        
+
+        slope_num2 = dev_ycoord[j] - dev_ycoord[srcTank];
+        slope_den2 = dev_xcoord[j] - dev_xcoord[srcTank];
+                
+        if (health[destTank] <= 0){
+            if ( slope_num1 == 0 && slope_num2 == 0){ // horizontal line            
+                // +ve line
+                if (  (dev_xcoord[srcTank] <  dev_xcoord[destTank] && dev_xcoord[j] > dev_xcoord[srcTank]))
+                    flag = true; 
+
+                // -ve line
+                if ( dev_xcoord[srcTank] > dev_xcoord[destTank] && dev_xcoord[j] < dev_xcoord[srcTank])
+                    flag = true; 
+                //printf("Inside1 srcTank %d destTank %d cur %d\n", srcTank, destTank, j); 
+            }
+            else if ( slope_den1 == 0 && slope_den2 == 0){ // vertical line            
+                // +ve line
+                if ( dev_ycoord[srcTank] < dev_ycoord[destTank] && dev_ycoord[j] > dev_ycoord[srcTank])
+                    flag = true; 
+
+                // -ve line
+                if ( dev_ycoord[srcTank] > dev_ycoord[destTank] && dev_ycoord[j] < dev_ycoord[srcTank])
+                    flag = true; 
+              //printf("Inside2 srcTank %d destTank %d cur %d\n", srcTank, destTank, j); 
+            }
+            else if (slope_num1 != 0 && slope_den1 != 0){
+                if ( slope_num1 * slope_den2 == slope_den1 *  slope_num2){
+                 // slopes are same
+                    flag = true; 
+                    //printf("Inside3 srcTank %d destTank %d cur %d\n", srcTank, destTank, j); 
+                }
+            }
+        }
+        else{
+            if ( dev_xcoord[j] < min (dev_xcoord[srcTank], dev_xcoord[destTank] ) || dev_xcoord[j] > max (dev_xcoord[srcTank], dev_xcoord[destTank] ))
+                    flag = false;
+            else if ( dev_ycoord[j] < min (dev_ycoord[srcTank], dev_ycoord[destTank] ) || dev_ycoord[j] > max (dev_ycoord[srcTank], dev_ycoord[destTank] ))
+                    flag = false;
+
+            else if ( slope_num1 * slope_den2 == slope_den1 *  slope_num2){
+             // slopes are same                
+                 //printf("Inside srcTank %d destTank %d cur %d\n", srcTank, destTank, j); 
+                // printf("x1 %d x2 %d curx %d\n", min (dev_xcoord[srcTank], dev_xcoord[destTank] ), max (dev_xcoord[srcTank], dev_xcoord[destTank] ), dev_xcoord[j]); 
+                // printf("y1 %d y2 %d cury %d\n", min (dev_ycoord[srcTank], dev_ycoord[destTank] ), max (dev_ycoord[srcTank], dev_ycoord[destTank] ), dev_ycoord[j]); 
+                flag = true; 
+            }
+        }
+    }
+    
+    if ( flag ){
+        dist = slope_num2*slope_num2 + slope_den2* slope_den2; 
+        destTank = j;
+    }
+    
+    //cout << "[][][] finalDist" << dist << " change " << changeTank << "\n";
+
+    //printf("srcTank %d destTank %d\n", srcTank, destTank);    
+    
+    //printf("after syncthreads\n"); 
+    atomicMin(&finaldestTank[srcTank], dist);
+    __syncthreads();        
+
+    if (finaldestTank[srcTank] == dist && health[destTank] > 0) {
+        dev_score[srcTank] += 1;        
+        printf("blockId %d tid %d\n", blockIdx.x, threadIdx.x); 
+        //printf("old round %d srcTank %d tid %d destTank %d oldHealth %d Updhealth %d\n",round, srcTank, j, destTank, health[destTank], updateHealth[destTank]);     
+        atomicAdd(&updateHealth[destTank], -1);
+        //printf("new round %d srcTank %d tid %d destTank %d oldHealth %d Updhealth %d\n",round, srcTank, j, destTank, health[destTank], updateHealth[destTank]);     
+    }       
+    // health[srcTank] += updateHealth[srcTank];
+    // if ( health[srcTank] <= 0) {
+    //     atomicAdd(alive, -1);
+    //     //printf("inside kernel, round: %d alive: %d \n", round, *alive);
+    // }
+    //printf("outside old\n");     
+}
+//***********************************************
+
+
+__global__ void checking(int *health, int *updateHealth,
+    int *dev_score, int *dev_xcoord, int *dev_ycoord, int round, int *alive, int T){
+    
+    printf("gT is: %d\n", gT); 
+    
+    printf("Health: "); 
+    for(int i = 0; i<T; ++i){
+        printf("%d ", health[i]);         
+    }
+    printf("\n"); 
+    
+    printf("UpdateHealth: "); 
+    for(int i = 0; i<T; ++i){        
+        printf("%d ", updateHealth[i]); 
+    }
+    printf("\n"); 
+
+    printf("dev_score: "); 
+    for(int i = 0; i<T; ++i){
+        printf("%d ", dev_score[i]); 
+    }
+    printf("\n"); 
+
+    printf("dev_xcoord: "); 
+    for(int i = 0; i<T; ++i){
+        printf("%d ", dev_xcoord[i]); 
+    }
+    printf("\n"); 
+
+    printf("dev_ycoord: "); 
+    for(int i = 0; i<T; ++i){
+        printf("%d ", dev_ycoord[i]); 
+    }
+    printf("\n"); 
+}
+
+int main(int argc,char **argv)
+{
+    // Variable declarations
+    int M,N,T,H,*xcoord,*ycoord,*score;
+
+
+    FILE *inputfilepointer;
+
+    //File Opening for read
+    char *inputfilename = argv[1];
+    inputfilepointer    = fopen( inputfilename , "r");
+
+    if ( inputfilepointer == NULL )  {
+        printf( "input.txt file failed to open." );
+        return 0;
+    }
+
+    fscanf( inputfilepointer, "%d", &M );
+    fscanf( inputfilepointer, "%d", &N );
+    fscanf( inputfilepointer, "%d", &T ); // T is number of Tanks
+    fscanf( inputfilepointer, "%d", &H ); // H is the starting Health point of each Tank
+
+    // Allocate memory on CPU
+    xcoord=(int*)malloc(T * sizeof (int));  // X coordinate of each tank
+    ycoord=(int*)malloc(T * sizeof (int));  // Y coordinate of each tank
+    score=(int*)malloc(T * sizeof (int));  // Score of each tank (ensure that at the end you have copied back the score calculations on the GPU back to this allocation)
+
+    // Get the Input of Tank coordinates
+    for(int i=0;i<T;i++)
+    {
+      fscanf( inputfilepointer, "%d", &xcoord[i] );
+      fscanf( inputfilepointer, "%d", &ycoord[i] );
+    }
+
+
+    auto start = chrono::high_resolution_clock::now();
+
+    //*********************************
+    // Your Code begins here (Do not change anything in main() above this comment)
+    //********************************
+    int *alive;
+    cudaHostAlloc(&alive, sizeof(int), 0);
+    *alive = T;
+
+    int *updateHealth;
+    cudaMalloc(&updateHealth, T * sizeof(int));
+    cudaMemset(updateHealth, 0, T * sizeof(int));
+
+    int round = 0;    
+    int *health_ptr; 
+    cudaMalloc(&health_ptr, T * sizeof(int));    
+    
+    int *dev_score_ptr;
+    cudaMalloc(&dev_score_ptr, T * sizeof(int));    
+    cudaMemset(dev_score_ptr, 0, T * sizeof(int));
+    
+    int *dev_xcoord_ptr;
+    cudaMalloc(&dev_xcoord_ptr, T * sizeof(int));    
+    cudaMemcpy(dev_xcoord_ptr, xcoord, T * sizeof(int), cudaMemcpyHostToDevice);     
+
+    int *dev_ycoord_ptr;
+    cudaMalloc(&dev_ycoord_ptr, T * sizeof(int));    
+    cudaMemcpy(dev_ycoord_ptr, ycoord, T * sizeof(int), cudaMemcpyHostToDevice); 
+    
+    ll *finaldestTank; 
+    cudaMalloc(&finaldestTank, T * sizeof(ll));    
+    
+    initialize<<< 1 , T >>> (T, health_ptr, H);
+    cudaDeviceSynchronize();
+
+    // checking <<< 1 , 1 >>> (health_ptr, updateHealth, dev_score_ptr, dev_xcoord_ptr, 
+    //     dev_ycoord_ptr, round, alive, T);     
+    // cudaDeviceSynchronize();     
+    //int iter = 100;
+
+    // int *temp_score = (int *) malloc(T * sizeof(int));     
+    // int *temp_health = (int *) malloc(T * sizeof(int)); 
+
+    while( *alive > 1 ){
+        if ( round % T != 0){
+            //cout << "[] " << "round" << " " << round << "\n";
+            K1 <<< T , T>>> (health_ptr, updateHealth, finaldestTank, dev_score_ptr, dev_xcoord_ptr, 
+                dev_ycoord_ptr, round, alive);
+            cudaDeviceSynchronize();
+            K2 <<< 1 , T>>> (health_ptr, updateHealth, finaldestTank, dev_score_ptr, dev_xcoord_ptr, 
+                dev_ycoord_ptr, round, alive);
+            cudaDeviceSynchronize();
+            cudaMemset(updateHealth, 0, T * sizeof(int));
+            // cudaMemcpy(temp_score, dev_score_ptr, T * sizeof(int), cudaMemcpyDeviceToHost); 
+            // cudaMemcpy(temp_health, health_ptr, T * sizeof(int), cudaMemcpyDeviceToHost); 
+            // cout << "round: " << round << ": "; 
+
+            // for(int i = 0; i<T; ++i)
+            //     cout << temp_score[i] << " ";             
+            
+            // for(int i = 0; i<T; ++i)
+            //         cout << temp_health[i] << " "; 
+            // cout << "\n"; 
+            //cout << "round: " << round << "alive: " << *alive << "\n";
+        }
+        ++round;
+        //cout << "\n";
+    }    
+    cudaMemcpy(score, dev_score_ptr, T * sizeof(int), cudaMemcpyDeviceToHost); 
+    
+    // cout << "final score: ";
+    // for(int i = 0; i<T; ++i)
+    //   cout << score[i] << " "; 
+    // cout << "\n"; 
+    //*********************************
+    // Your Code ends here (Do not change anything in main() below this comment)
+    //********************************
+    
+    auto end  = chrono::high_resolution_clock::now();
+
+    chrono::duration<double, std::micro> timeTaken = end-start;
+
+    printf("Execution time : %f\n", timeTaken.count());
+
+    // Output
+    char *outputfilename = argv[2];
+    char *exectimefilename = argv[3];
+    FILE *outputfilepointer;
+    outputfilepointer = fopen(outputfilename,"w");
+
+    for(int i=0;i<T;i++)
+    {
+        fprintf( outputfilepointer, "%d\n", score[i]);
+    }
+    fclose(inputfilepointer);
+    fclose(outputfilepointer);
+
+    outputfilepointer = fopen(exectimefilename,"w");
+    fprintf(outputfilepointer,"%f", timeTaken.count());
+    fclose(outputfilepointer);
+
+    free(xcoord);
+    free(ycoord);
+    free(score);
+    cudaDeviceSynchronize();
+    return 0;
+}
+
+

@@ -1,0 +1,139 @@
+
+Using single gmat outside loop
+======= START =========
+Sun Apr  7 03:23:45 PM UTC 2024
+execution time : 201158.436000
+input_0 success
+execution time : 181565.306000
+input_1 success
+execution time : 193237.855000
+input_2 success
+execution time : 220831.651000
+input_3 success
+execution time : 217138.197000
+input_4 success
+======= START =========
+Sun Apr  7 03:25:11 PM UTC 2024
+execution time : 207658.924000
+input_0 success
+execution time : 189272.488000
+input_1 success
+execution time : 183310.939000
+input_2 success
+execution time : 183361.218000
+input_3 success
+execution time : 174481.133000
+input_4 success
+execution time : 2381606.112000
+input_5 success
+execution time : 220613.558000
+input_6 success
+execution time : 1760372.409000
+input_7 success
+execution time : 2857258.154000
+input_8 success
+========== END =========
+======= START =========
+Sun Apr  7 03:29:53 PM UTC 2024
+execution time : 248031.522000
+input_0 success
+execution time : 211377.056000
+input_1 success
+execution time : 219280.537000
+input_2 success
+execution time : 225047.128000
+input_3 success
+execution time : 206037.003000
+input_4 success
+execution time : 2432676.014000
+input_5 success
+execution time : 195858.559000
+input_6 success
+execution time : 2370352.145000
+input_7 success
+execution time : 3591656.503000
+input_8 success
+========== END =========
+======= START =========
+Sun Apr  7 03:34:19 PM UTC 2024
+execution time : 409904.133000
+input_0 success
+execution time : 198166.714000
+input_1 success
+execution time : 247413.869000
+input_2 success
+execution time : 200609.436000
+input_3 success
+execution time : 225997.063000
+input_4 success
+execution time : 2440706.635000
+input_5 success
+execution time : 264639.649000
+input_6 success
+execution time : 1850818.287000
+input_7 success
+execution time : 2517052.498000
+input_8 success
+========== END =========
+======= START =========
+Sun Apr  7 03:38:59 PM UTC 2024
+execution time : 221031.132000
+input_0 success
+execution time : 191229.932000
+input_1 success
+execution time : 200582.420000
+input_2 success
+execution time : 211901.359000
+input_3 success
+execution time : 218094.282000
+input_4 success
+execution time : 2170031.621000
+input_5 success
+execution time : 198484.683000
+input_6 success
+execution time : 2284478.511000
+input_7 success
+execution time : 2378605.521000
+input_8 success
+========== END =========
+======= START =========
+Sun Apr  7 03:43:05 PM UTC 2024
+execution time : 220922.337000
+input_0 success
+execution time : 200125.093000
+input_1 success
+execution time : 196374.288000
+input_2 success
+execution time : 190263.486000
+input_3 success
+execution time : 189634.162000
+input_4 success
+execution time : 1672272.726000
+input_5 success
+execution time : 213877.638000
+input_6 success
+execution time : 1740185.068000
+input_7 success
+execution time : 2121983.051000
+input_8 success
+========== END =========
+======= START =========
+Sun Apr  7 03:45:11 PM UTC 2024
+execution time : 217634.856000
+input_0 success
+execution time : 193131.946000
+input_1 success
+execution time : 192913.139000
+input_2 success
+execution time : 193837.472000
+input_3 success
+execution time : 187965.958000
+input_4 success
+execution time : 1589871.392000
+input_5 success
+execution time : 271349.035000
+input_6 success
+execution time : 1739386.815000
+input_7 success
+execution time : 1565670.421000
+input_8 success

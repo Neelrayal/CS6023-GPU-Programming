@@ -1,0 +1,167 @@
+Tue Apr 16 01:24:08 PM UTC 2024 
+working_parallel1
+Execution time : 108888.334000
+success
+Execution time : 84679.345000
+success
+Execution time : 87440.516000
+success
+Execution time : 129083.321000
+success
+Execution time : 546164.483000
+success
+Execution time : 679536.229000
+success
+
+
+Wed Apr 17 04:26:19 AM UTC 2024
+working_thrust1
+Execution time : 225524.567000
+success
+Execution time : 209131.409000
+success
+Execution time : 192078.442000
+success
+Execution time : 220431.951000
+success
+Execution time : 594132.257000
+success
+Execution time : 766580.118000
+success
+
+
+Wed Apr 17 04:28:03 AM UTC 2024
+working_thrust1
+Execution time : 195158.033000
+success
+Execution time : 182673.137000
+success
+Execution time : 187727.072000
+success
+Execution time : 224200.755000
+success
+Execution time : 620966.034000
+success
+Execution time : 593244.837000
+success
+
+Thu Apr 18 02:26:47 PM UTC 2024
+working_two_kernels
+Execution time : 233130.115000
+success
+Execution time : 218779.995000
+success
+Execution time : 216063.840000
+success
+Execution time : 226971.686000
+success
+Execution time : 288239.078000
+success
+Execution time : 317327.996000
+success
+
+Thu Apr 18 05:23:41 PM UTC 2024
+working_two_kernels
+Execution time : 488338.658000
+success
+Execution time : 299887.175000
+success
+Execution time : 276142.044000
+success
+Execution time : 333002.759000
+success
+Execution time : 376350.121000
+success
+Execution time : 415490.488000
+success
+
+Thu Apr 18 05:25:21 PM UTC 2024
+working_two_kernels
+Execution time : 300392.949000
+success
+Execution time : 283028.793000
+success
+Execution time : 304816.789000
+success
+Execution time : 324060.804000
+success
+Execution time : 408268.526000
+success
+Execution time : 431530.887000
+success
+
+Thu Apr 18 05:26:32 PM UTC 2024
+working_two_kernels
+Execution time : 354075.792000
+success
+Execution time : 279497.968000
+success
+Execution time : 288810.489000
+success
+Execution time : 288365.651000
+success
+Execution time : 371263.662000
+success
+Execution time : 420021.718000
+success
+
+
+Thu Apr 18 06:37:43 PM UTC 2024
+working_two_kernel_and_thrust
+Execution time : 293892.471000
+success
+Execution time : 112776.888000
+success
+Execution time : 90184.853000
+success
+Execution time : 131356.395000
+success
+Execution time : 195225.151000
+success
+Execution time : 233305.343000
+success
+
+Thu Apr 18 06:40:13 PM UTC 2024
+working_two_kernel_and_thrust
+Execution time : 106066.981000
+success
+Execution time : 83775.182000
+success
+Execution time : 89862.795000
+success
+Execution time : 99581.680000
+success
+Execution time : 178894.616000
+success
+Execution time : 225483.361000
+success
+
+Thu Apr 18 06:40:52 PM UTC 2024
+working_two_kernel_and_thrust
+Execution time : 113136.019000
+success
+Execution time : 89778.872000
+success
+Execution time : 116721.919000
+success
+Execution time : 108853.765000
+success
+Execution time : 178825.315000
+success
+Execution time : 221152.341000
+success
+
+Tue Apr 23 03:58:22 PM UTC 2024
+working_thrust_twokernel
+Execution time : 224013.446000
+success
+Execution time : 196344.514000
+success
+Execution time : 197640.710000
+success
+Execution time : 207181.777000
+success
+Execution time : 295636.594000
+success
+Execution time : 335068.834000
+success

@@ -1,0 +1,326 @@
+/*
+Trying traversing level wise ( non - recursion )
+*/
+
+/*
+	CS 6023 Assignment 3.
+	Do not make any changes to the boiler plate code or the other files in the folder.
+	Use cudaFree to deallocate any memory not in usage.
+	Optimize as much as possible.
+ */
+
+#include "SceneNode.h"
+#include <queue>
+#include "Renderer.h"
+#include <stdio.h>
+#include <string.h>
+#include <cuda.h>
+#include <chrono>
+
+
+__global__ void fill_output_mat(int *opacitymat, int curopacity, int final_x, int final_y, int *mesh, int *gmat, int r, int c, int R, int C) {
+    unsigned tid = blockIdx.x * 1024 + threadIdx.x;
+    if ( tid >= r * c) return;
+
+		/*
+		if ( tid == 0){
+				 printf("diff_x = %d diff_y = %d R = %d C = %d r = %d c = %d\n", final_x, final_y, R, C, r , c);
+		}
+		*/
+    int cur_row = tid / c + final_x;
+    int cur_col = tid % c + final_y;
+
+    if ( cur_row < 0 || cur_row >= R || cur_col < 0 || cur_col >= C)
+      return;
+
+    if ( opacitymat[cur_row* C + cur_col] <= curopacity){
+      opacitymat[cur_row* C + cur_col] = curopacity;
+      //printf("cur_row = %d cur_col = %d gmat = %d tid = %d row = %d, col = %d, value = %d \n", cur_row, cur_col,cur_row* C + cur_col, tid, (tid/c) , tid%c, mesh[ tid ]);
+      gmat[cur_row* C + cur_col] = mesh[ tid ];
+    }
+}
+
+__global__ void check (unsigned int *count, int *q){
+    *count = 1;
+    q[0] = 0;
+    //printf("vaule of count is: %d\n", *count);
+}
+
+
+__global__ void pushChildren(int parent, int LIMIT, int *gOffset, int *gCsr,
+                int *gupdates_r, int *gupdates_c, int *q, unsigned int *count, int *vis){
+    unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
+		 if ( tid >= LIMIT ) return;
+     int cur =  gCsr [ gOffset[parent] + tid ];
+		 gupdates_r[cur] += gupdates_r[parent];
+		 gupdates_c[cur] += gupdates_c[parent];
+     atomicAdd(&vis[cur], 1);
+    int qIndex = atomicInc(count, int(1e8));
+    //printf("qIndex %d count %d cur %d\n", qIndex, *count, cur);
+    q[qIndex] = cur;
+}
+
+__global__ void traverse(int ptr, int LIMIT, int *gupdates_r, int *gupdates_c, int *gOffset,
+                         int *gCsr, int *q, unsigned int *count, int *vis){
+		 unsigned tid = blockIdx.x * blockDim.x + threadIdx.x;
+		 if ( tid >= LIMIT ) return;
+		 int cur = q[ptr + tid];
+		 int children = gOffset[cur+1] - gOffset[cur];
+     if ( children == 0) return;
+      /*
+		 printf("Current %d children %d\n", cur, children);
+    printf("Queue countents: ");
+    for(int i = 0; i<(*count); ++i){
+      printf("%d ", q[i]);
+    }
+    printf("\n");
+    */
+     //printf("ins traverse, cur is: %d children %d \n", cur, children);
+		 int blocks = ceil ( (children / (float) 1024) );
+		 pushChildren <<< blocks, 1024 >>> (cur, children, gOffset, gCsr,gupdates_r, gupdates_c, q, count, vis);
+}
+
+void readFile (const char *fileName, std::vector<SceneNode*> &scenes, std::vector<std::vector<int> > &edges, std::vector<std::vector<int> > &translations, int &frameSizeX, int &frameSizeY) {
+	/* Function for parsing input file*/
+
+	FILE *inputFile = NULL;
+	// Read the file for input.
+	if ((inputFile = fopen (fileName, "r")) == NULL) {
+		printf ("Failed at opening the file %s\n", fileName) ;
+		return ;
+	}
+
+	// Input the header information.
+	int numMeshes ;
+	fscanf (inputFile, "%d", &numMeshes) ;
+	fscanf (inputFile, "%d %d", &frameSizeX, &frameSizeY) ; // R * C
+
+
+	// Input all meshes and store them inside a vector.
+	int meshX, meshY ;
+	int globalPositionX, globalPositionY; // top left corner of the matrix.
+	int opacity ;
+	int* currMesh ;
+	for (int i=0; i<numMeshes; i++) {
+		fscanf (inputFile, "%d %d", &meshX, &meshY) ; // r, c size of each mesh
+		fscanf (inputFile, "%d %d", &globalPositionX, &globalPositionY) ; // x, y starting co-ordinate of each mesh
+		fscanf (inputFile, "%d", &opacity) ;
+		currMesh = (int*) malloc (sizeof (int) * meshX * meshY) ; // 2-d matrix mesh
+		for (int j=0; j<meshX; j++) {
+			for (int k=0; k<meshY; k++) {
+				fscanf (inputFile, "%d", &currMesh[j*meshY+k]) ;
+        //printf("%d ", currMesh[j*meshY+k]);
+			}
+      //printf("\n");
+		}
+		//Create a Scene out of the mesh.
+		SceneNode* scene = new SceneNode (i, currMesh, meshX, meshY, globalPositionX, globalPositionY, opacity) ;
+		scenes.push_back (scene) ; // array of meshes
+	}
+
+	// Input all relations and store them in edges.
+	int relations;
+	fscanf (inputFile, "%d", &relations) ; // E which is #edges
+	int u, v ;
+	for (int i=0; i<relations; i++) {
+		fscanf (inputFile, "%d %d", &u, &v) ;
+		edges.push_back ({u,v}) ;
+	}
+
+	// Input all translations.
+	int numTranslations ;
+	fscanf (inputFile, "%d", &numTranslations) ;
+	std::vector<int> command (3, 0) ;
+	for (int i=0; i<numTranslations; i++) {
+		fscanf (inputFile, "%d %d %d", &command[0], &command[1], &command[2]) ;
+		translations.push_back (command) ;
+	}
+}
+
+
+void writeFile (const char* outputFileName, int *hFinalPng, int frameSizeX, int frameSizeY) {
+	/* Function for writing the final png into a file.*/
+	FILE *outputFile = NULL;
+	if ((outputFile = fopen (outputFileName, "w")) == NULL) {
+		printf ("Failed while opening output file\n") ;
+	}
+
+	for (int i=0; i<frameSizeX; i++) {
+		for (int j=0; j<frameSizeY; j++) {
+			fprintf (outputFile, "%d ", hFinalPng[i*frameSizeY+j]) ;
+		}
+		fprintf (outputFile, "\n") ;
+	}
+}
+
+
+int main (int argc, char **argv) {
+
+	// Read the scenes into memory from File.
+	const char *inputFileName = argv[1] ;
+	int* hFinalPng;
+
+	int frameSizeX, frameSizeY ; // R * C
+	std::vector<SceneNode*> scenes ;
+	std::vector<std::vector<int> > edges ;
+	std::vector<std::vector<int> > translations ;
+	readFile (inputFileName, scenes, edges, translations, frameSizeX, frameSizeY) ;
+	hFinalPng = (int*) malloc (sizeof (int) * frameSizeX * frameSizeY) ;
+
+	// Make the scene graph from the matrices.
+    Renderer* scene = new Renderer(scenes, edges) ;
+
+	// Basic information.
+	int V = scenes.size () ; // #meshes
+	int E = edges.size () ; // #edges
+	int numTranslations = translations.size () ; // #queries
+
+	// Convert the scene graph into a csr.
+	scene->make_csr () ; // Returns the Compressed Sparse Row representation for the graph.
+	int *hOffset = scene->get_h_offset () ;
+	int *hCsr = scene->get_h_csr () ;
+	int *hOpacity = scene->get_opacity () ; // hOpacity[vertexNumber] contains opacity of vertex vertexNumber.
+	int **hMesh = scene->get_mesh_csr () ; // hMesh[vertexNumber] contains the mesh attached to vertex vertexNumber.
+	int *hGlobalCoordinatesX = scene->getGlobalCoordinatesX () ; // hGlobalCoordinatesX[vertexNumber] contains the X coordinate of the vertex vertexNumber.
+	int *hGlobalCoordinatesY = scene->getGlobalCoordinatesY () ; // hGlobalCoordinatesY[vertexNumber] contains the Y coordinate of the vertex vertexNumber.
+	int *hFrameSizeX = scene->getFrameSizeX () ; // hFrameSizeX[vertexNumber] contains the vertical size of the mesh attached to vertex vertexNumber.
+	int *hFrameSizeY = scene->getFrameSizeY () ; // hFrameSizeY[vertexNumber] contains the horizontal size of the mesh attached to vertex vertexNumber.
+
+  auto start = std::chrono::high_resolution_clock::now () ;
+
+	int *updates_r = (int *) malloc(V * sizeof(int));
+  int *updates_c = (int *) malloc(V * sizeof(int));
+
+  for(int i = 0; i<V; ++i){
+    updates_c[i] = 0;
+    updates_r[i] = 0;
+  }
+
+	for(int i = 0; i<numTranslations; ++i){
+      int meshid = translations[i][0], command = translations[i][1], amount = translations[i][2];
+      switch(command){
+          case 0:
+            updates_r[meshid] -= amount;
+            break;
+          case 1:
+            updates_r[meshid] += amount;
+            break;
+          case 2:
+            updates_c[meshid] -= amount;
+            break;
+          case 3:
+            updates_c[meshid] += amount;
+            break;
+          default:
+            printf(" %d problem\n", command);
+            break;
+      }
+  }
+
+	// Code begins here.
+	// Do not change anything above this comment.
+
+  // giving memory to our final matrix on GPU
+  int *gmat;
+  cudaMalloc(&gmat, frameSizeX * frameSizeY* sizeof(int));
+	cudaMemset(gmat, 0, frameSizeX * frameSizeY* sizeof(int));
+
+	int *gupdates_r, *gupdates_c;
+	cudaMalloc(&gupdates_r, V * sizeof(int));
+	cudaMalloc(&gupdates_c, V * sizeof(int));
+	cudaMemcpy(gupdates_r, updates_r, V * sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(gupdates_c, updates_c, V * sizeof(int), cudaMemcpyHostToDevice);
+
+  int *opacitymat;
+  cudaMalloc(&opacitymat, frameSizeX * frameSizeY* sizeof(int));
+	cudaMemset(opacitymat, 0, frameSizeX * frameSizeY* sizeof(int));
+
+	int *gCsr, *gOffset;
+	cudaMalloc(&gCsr, E * sizeof(int));
+	cudaMalloc(&gOffset, (V + 1) * sizeof(int));
+	cudaMemcpy(gCsr, hCsr, E * sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(gOffset, hOffset, (V + 1) * sizeof(int), cudaMemcpyHostToDevice);
+
+ /*
+	int children = hOffset[1]-hOffset[0];
+	int blocks = ceil ( (children / (float) 1024) );
+	traverse <<< blocks, 1024 >>> (0, children , gupdates_r, gupdates_c, gOffset, gCsr, updates_r[0], updates_c[0]);
+  */
+
+ int ptr = 0, diff = 1;
+ unsigned int *count;
+ cudaMalloc(&count, sizeof(unsigned int ));
+  int *q, *vis;
+ cudaMalloc(&q, (V + 5 ) * sizeof(int));
+ cudaMalloc(&vis, (V + 5 ) * sizeof(int));
+
+ check <<< 1 , 1 >>> (count, q);
+ cudaDeviceSynchronize();
+
+ unsigned int *old_count, *new_count;
+ old_count = (unsigned int *) malloc ( sizeof (unsigned int ) ) ;
+ new_count = (unsigned int *) malloc ( sizeof (unsigned int ) ) ;
+
+ while ( diff ){
+     cudaMemcpy(old_count, count, sizeof(int), cudaMemcpyDeviceToHost);
+     int blocks = ceil ( (diff / (float) 1024) );
+     //__global__ void traverse(int ptr, int LIMIT, int *gupdates_r, int *gupdates_c, int *gOffset,
+                         //int *gCsr, int *q, unsigned int *count){
+     traverse<<< blocks, 1024 >>> (ptr, diff, gupdates_r, gupdates_c, gOffset, gCsr, q, count, vis);
+     cudaDeviceSynchronize();
+     //printf("above cpu\n")   ;
+     cudaMemcpy(new_count, count, sizeof(int), cudaMemcpyDeviceToHost);
+     //printf("reached cup\n");
+     diff = *new_count - *old_count;
+     ptr = *old_count;
+     //printf("old count is %d newcount is %d \n", *old_count, *new_count);
+
+ }
+	int *hvis;
+	hvis = (int *) malloc( (V + 5) * sizeof(int));
+	cudaMemcpy(hvis, vis, (V + 5) * sizeof(int), cudaMemcpyDeviceToHost);
+	printf("Visisted array\n");
+  int cnt = 0;
+  for(int i = 0; i<V; ++i){
+				if ( hvis[i] >= 2) cnt++;
+	}
+  printf("more than 1 count = %d\n", cnt);
+	cudaMemcpy(updates_r, gupdates_r, V * sizeof(int), cudaMemcpyDeviceToHost);
+	cudaMemcpy(updates_c, gupdates_c, V * sizeof(int), cudaMemcpyDeviceToHost);
+	/*
+  printf("updates: \n");
+  for(int i = 0; i<V; ++i){
+    printf("r = %d c = %d\n", updates_r[i], updates_c[i]);
+  }
+  */
+  for(int i = 0; i<V; ++i){
+    int curmeshId = i;
+    int r = hFrameSizeX[curmeshId];
+    int c = hFrameSizeY[curmeshId];
+		int *gtempmesh  = (int *) malloc( r * c * sizeof(int));
+		cudaMalloc(&gtempmesh, r * c * sizeof(int));
+		cudaMemcpy(gtempmesh, hMesh[curmeshId], r * c * sizeof(int), cudaMemcpyHostToDevice);
+    int blocks = ceil (r*c/(float)1024);
+    int final_x = updates_r[i] + hGlobalCoordinatesX[i];
+    int final_y = updates_c[i] + hGlobalCoordinatesY[i];
+
+    fill_output_mat<<< blocks, 1024 >>> (opacitymat, hOpacity[curmeshId], final_x, final_y, gtempmesh, gmat,
+        r, c, frameSizeX, frameSizeY);
+      cudaDeviceSynchronize();
+  }
+
+  cudaMemcpy(hFinalPng, gmat, frameSizeX*frameSizeY*sizeof(int), cudaMemcpyDeviceToHost);
+
+	// Do not change anything below this comment.
+	// Code ends here.
+
+	auto end  = std::chrono::high_resolution_clock::now () ;
+
+	std::chrono::duration<double, std::micro> timeTaken = end-start;
+
+	printf ("execution time : %f\n", timeTaken) ;
+	// Write output matrix to file.
+	const char *outputFileName = argv[2] ;
+	writeFile (outputFileName, hFinalPng, frameSizeX, frameSizeY) ;
+
+}
